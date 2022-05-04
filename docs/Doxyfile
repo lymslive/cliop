@@ -1,0 +1,30 @@
+PROJECT_NAME           = "Cmdline Option Argument Lib"
+PROJECT_NUMBER         =
+PROJECT_BRIEF          =
+ALLOW_UNICODE_NAMES    = YES
+#OUTPUT_LANGUAGE        = Chinese
+FULL_PATH_NAMES        = NO
+JAVADOC_AUTOBRIEF      = YES
+QT_AUTOBRIEF           = YES
+
+MARKDOWN_SUPPORT       = YES
+
+BUILTIN_STL_SUPPORT    = YES
+
+QUIET                  = NO
+
+INPUT                  = ../src
+RECURSIVE              = NO
+EXCLUDE                =
+EXAMPLE_PATH           =
+
+SOURCE_BROWSER         = NO
+
+CLANG_ASSISTED_PARSING = NO
+CLANG_OPTIONS          =
+
+GENERATE_HTML          = YES
+GENERATE_LATEX         = YES
+
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = NO
