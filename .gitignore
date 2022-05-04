@@ -1,0 +1,8 @@
+docs/
+build/
+lib/
+build/
+bin/
+*.o
+*.d
+*.bak
