@@ -43,7 +43,7 @@ endif
 TARGET=$(LIB_DIR)/libcliop.a
 TEST_TARGET=$(EXE_DIR)/utest-cliop
 
-.PHONY: all clean rebuild dir test utest sample
+.PHONY: all clean rebuild dir test utest sample docs
 all: dir $(TARGET)
 
 ifneq ($(MAKECMDGOALS),clean)
@@ -70,11 +70,15 @@ utest : $(TINYTAST) $(TEST_TARGET)
 test : utest
 	$(TEST_TARGET) --cout=silent
 
+TINYTAST_REMOTE = https://github.com/lymslive/couttast/blob/main/include/tinytast.hpp
 $(TINYTAST) :
-	@wget -o $@
+	@wget $(TINYTAST_REMOTE) -O $@
 
 sample :
 	make -C sample/
+
+docs :
+	cd docs/ && doxygen
 
 rebuild: clean all
 
