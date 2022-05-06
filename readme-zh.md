@@ -537,13 +537,13 @@ env.SubCommand("foo", "description test", subcmd_function)
 ```cpp
 int subcmd_function(int argc, const char* argv[], cli::CEnvBase* args)
 {
-      // make use of parsed argv in args to do stuff ...
-      return 0;
+    // make use of parsed argv in args to do stuff ...
+    return 0;
 }
 ```
 
 前两个参数来自 `main()` ，但进行了偏移修正，略过原来的第一个参数。即 `argc` 数
-量少 1 ，而 `argv[0]` 就是子命名名称。一般情况下可能已用不到前两个参数，只要利
+量少 1 ，而 `argv[0]` 就是子命令名称。一般情况下可能已用不到前两个参数，只要利
 用第三参数的 `CEnvBase` 对象指针获取已解析的命令行参数完成业务逻辑。但假如不同
 子命令有着完全不同的选项设置，尤其是同一个选项在不同子命令中有不同的意义，那就
 需要在句柄函数中重新解析 `argv[]` 命令行参数。
@@ -556,15 +556,15 @@ int subcmd_function(int argc, const char* argv[], cli::CEnvBase* args)
 #### 主命令处理函数句柄
 
 类似子命令的处理函数句柄，也可以给主命令（或者不设计子命令的单一命令程序）注册
-处理相同原型的函数句柄，它能在 `Feed()` 函数解析命令行参数后自动调用之。使用方
-式也相似：
+相同原型的函数句柄，它能在 `Feed()` 函数解析命令行参数后自动调用之。使用方式也
+相似：
 
 ```cpp
 env.Command("program_name", "description test", cmd_function);
 ```
 
 这个功能的作用是可以某种程度上避免继承并重写 `Run()` 方法，而只需要使用基类对
-象，并根据需要注册不同注册函数即可。因为现在许多开发者开始反对滥用继承机制。
+象，并根据需要注册不同处理函数即可。因为现在许多开发者开始反对滥用继承机制。
 例如不同子命令可不必继承许多类，只用基类创建不同对象用于处理相同子命令的工作：
 
 ```cpp
@@ -580,10 +580,10 @@ int main(int argc, const char* argv[])
 }
 ```
 
-因为主命令的函数句柄是不必须的，所以 `Command()` 方法只有前面两个甚至一个参数
-。而第一个参数作为命令名称会显示在 `--help` 帮助信息中，如果从未设置命令名称，
-则会将命令行参数 `argv[0]` 当作命令名称（可能包含路径）。但只要用 `Command()`
-方法注册了处理函数句柄，该 `env` 对象就不再调用其 `Run()` 方法。
+因为主命令的函数句柄是不必须的，所以 `Command()` 方法可只有前面两个甚至一个参
+数。而第一个参数作为命令名称会显示在 `--help` 帮助信息中，如果从未设置命令名称
+，则会将命令行参数 `argv[0]` 当作命令名称（可能包含路径）。但只要用
+`Command()` 方法注册了处理函数句柄，该 `env` 对象就不再调用其 `Run()` 方法。
 
 #### 严格子命令模式
 
@@ -621,7 +621,7 @@ env.SubCommand("foo", "description test", subcmd_function)
 
 本库不使用异常，且很多方法为了链式调用的便利性返回 `*this` 而无从返回错误码。
 所以有些用法明显不合理、用户应该避免的情况，没作特别处理，故其行为未定义。未定
-义的意思是取决于实现，当前的实现或许可接受，但不保证后续迭代时兼容逻辑。
+义的意思是取决于实现，当前的实现或许可接受，但不保证后续开发迭代时兼容逻辑。
 
 以下是一些未定义行为列表（未必齐全）：
 
@@ -630,3 +630,10 @@ env.SubCommand("foo", "description test", subcmd_function)
 * 设定短选项名重复
 * 注册子命令名为空，或重复
 * 对无参数的 Flag 选项取值
+
+## 参考实现
+
+当我未开发这个库之前，我曾用过以下库来解析命令行参数：
+
+* GNU `getopt` and `getopt_long`
+* [CLI11](https://github.com/CLIUtils/CLI11) 一个只有头文件的命令行参数库

@@ -3,6 +3,7 @@ build/
 lib/
 build/
 bin/
+utest/tinytast.hpp
 *.o
 *.d
 *.bak

@@ -66,11 +66,11 @@ $(TEST_TARGET):$(TEST_OBJS)
 	$(CXX) $(LDFLAGS) -o $@ $^
 
 TINYTAST = utest/tinytast.hpp
-utest : $(TINYTAST) $(TEST_TARGET)
+utest : $(TINYTAST) dir $(TEST_TARGET)
 test : utest
 	$(TEST_TARGET) --cout=silent
 
-TINYTAST_REMOTE = https://github.com/lymslive/couttast/blob/main/include/tinytast.hpp
+TINYTAST_REMOTE = https://raw.githubusercontent.com/lymslive/couttast/main/include/tinytast.hpp
 $(TINYTAST) :
 	@wget $(TINYTAST_REMOTE) -O $@
 

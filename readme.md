@@ -1,5 +1,7 @@
 # C++ Library for Command-Line Parameters Processing at Program Startup
 
+[中文版](readme-zh.md)
+
 In C/C++ Program, the `main()` function receives arguments passed from shell
 command lines, named `argc` and `argv`.  Most programs support many options to
 customize program behavior, which also rise the need for common command-line
@@ -27,7 +29,8 @@ make docs
 ```
 
 No additional dependencies, just STL and  C++11 standard. While unit tests
-rely only on the lightweight unit test framework header file `tinytast.hpp`
+rely only on the lightweight unit test framework header file
+[tinytast.hpp](https://github.com/lymslive/couttast/blob/main/include/tinytast.hpp)
 from [couttast](https://github.com/lymslive/couttast). You can also build the
 test program with `make utest` first and then manually run individual test
 cases:
@@ -615,3 +618,142 @@ Note: As long as the option is non-repeatable, if they are entered repeatedly on
 ### Subcommand Arguments and Behavior Dispatch
 
 #### Subcommand Handler
+
+The library also supports the subcommand mode, where the first parameter is
+specially handled and dispatched as a subcommand, with each subcommand
+completing one category of business functions. You can use the
+`CEnvBase::SubCommand()` method to add subcommands, for example:
+
+```cpp
+env.SubCommand("foo", "description test", subcmd_function)
+   .SubCommand("bar", "description test", subcmd_object);
+```
+
+The first two parameters are the subcommand name and related description
+(`--help` printable information), and the third parameter is the handle of the
+subcommand, that there are two kinds of handlers to choose.
+
+The first is a simple and straightforward function handler, which is defined
+roughly as follows:
+
+```cpp
+int subcmd_function(int argc, const char* argv[], cli::CEnvBase* args)
+{
+    // make use of parsed argv in args to do stuff ...
+    return 0;
+}
+```
+
+The first two parameters are from `main()`, but make an offset correction to
+skip the original first parameter. That is, the `argc` number amount is 1
+less, and `argv[0]` is the subcommand name. In general, the first two
+parameters may not be useful, as long as it can complete the business logic
+with the `CEnvBase` object pointer in the third argument which has parsed
+command-line arguments. But if any subcommands have completely different
+option settings, especially with the same option has different meanings in
+different subcommands, then the 'argv[]' command-line argument may need to be
+re-parsed in the handle function.
+
+The second handler for subcommand is an object of another `CEnvBase` or its
+derived class. The functionality of this handler object is more abundant. It
+is parsed by the respective subcommand-related `env` object (except for the
+first subcommand name) of the remaining command lines arguments, and can
+automatically respond to the `--help` after the subcommand. While in the
+former handler function, there is only one related `env` object for  main
+command to resolve all command line arguments.
+
+#### Main Command Handler
+
+Function handler to subcommands can also be registered to the main command (or
+a single command program that does not design subcommands) with  the same
+prototype, which can be automatically invoked after the `Feed()` function
+parses the command-line arguments. The method is also similar:
+
+```cpp
+env.Command("program_name", "description test", cmd_function);
+```
+
+This feature can avoid inheriting and overriding the `Run()` method to some extent, and only need to use the base class object, and register different handler functions as demanded. Because now many developers are starting to oppose the abuse of inheritance mechanisms.
+For example, different subcommands do not have to inherit many classes, and only use the base class to create different objects to handle the work of the subcommands:
+
+```cpp
+int func1(int argc, const char* argv[], cli::CEnvBase* args);
+int func2(int argc, const char* argv[], cli::CEnvBase* args);
+int main(int argc, const char* argv[])
+{
+    cli::CEnvBase env, env1, env2;
+    env1.Set(...).Command("cmd1", "", func1);
+    env2.Set(...).Command("cmd2", "", func2);
+    env.SubCommand("cmd1", "", env1).SubCommand("cmd2", "", env2);
+    return env.Feed(argc, argv);
+}
+```
+
+Because the function handler of the main command is not essential, the
+`Command()` method can have only the first two or even one argument. The first
+parameter as the command name is displayed in the `--help` help message, but
+if the command name is never set, the command line argument `argv[0]` is used
+instead (possibly including the path). As long as use the `Command()` method
+to register a handler function, the `env` object will no longer call its
+`Run()` method.
+
+#### Strict Subcommand Mode
+
+By default, when an `env` object registers subcommands, it doesn't mean that
+subcommands must be used. If the first argument cannot match any one
+subcommand, then it can continue to parse all command-line arguments as a
+childless program does 。 If you want to qualify that the first argument must
+be a valid subcommand name, you can additionally call the `SubCommandOnly()`
+method to enable strict subcommand mode, such as:
+
+```cpp
+env.SubCommand("foo", "description test", subcmd_function)
+   .SubCommand("bar", "description test", subcmd_object)
+   .SubCommandOnly();
+```
+
+At this point, when the first argument is an invalid subcommand name, the `Feed()` method returns a non-0 error code.
+
+#### Nested Subcommands
+
+Because the handler of a subcommand can be another `env` object, the
+subcommand can theoretically still have another set of subcommands of its own,
+and there is no limit to the depth of nesting. But in practice, most program
+only use a layer of subcommands, such as the popular `git` and `docker`
+command-line tools.
+
+#### Subcommand Dispatched by Soft Link
+
+Under Linux, you can associate multiple file names (command names) with a
+program by creating a soft link (or hard link).  Yes, some programs can also
+be launched in different ways and perform different tasks with the program
+name `argv[0]`. e.g. `vim` has soft symbol link name of `view` and `vimdiff`.
+
+This usage may be rare, and programs that dispatched by the first parameter
+`argv[1]` as a subcommand are more popular , so this library also takes
+precedence over this principle. However, it is also compatible with the
+former, when cannot find the subcommand from `argv[1]`, it whill also try
+again via `argv[0]` or `program_invocation_short_name`. Other than that, if
+the client program has special needs, it is also possible to reconstruct
+`argv[]` as needed and pass it on to `CEnvBase::Feed()`.
+
+## Undefined Behavior
+
+The library does not use exceptions, and many methods return `*this` for the convenience of chained calls without returning an error code.
+Therefore, some cases where the usage is obviously unreasonable and the user should avoid it are not specially treated, so their behavior is not defined. Undefined means it depends on the implementation, the current implementation may be acceptable, but the logic is not guaranteed to be compatible with subsequent development.
+
+Here is a list of some undefined behaviors (not necessarily exhaustive):
+
+* Set the long option named empty
+* Set long option name duplicated
+* Set short option name duplicated
+* Register subcommand named empty, or duplicated
+* Get value of flag which option with no argument
+
+## Code Reference
+
+Before I developed this library, I had used the following library to parse
+command-line arguments: 
+
+* GNU `getopt` and `getopt_long`
+* [CLI11](https://github.com/CLIUtils/CLI11)  an head only command line option lib.
