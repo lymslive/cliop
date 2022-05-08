@@ -18,8 +18,22 @@ DEF_TAST(error_setoption, "error in preset option")
     DESC("option name is empty");
     {
         cli::CEnvBase env;
-        env.Catch(cli::ERROR_CODE_OPTION_EMPTY).Flag('e', "", "empty long name");
-        COUT(env.Feed(argc, argv), cli::ERROR_CODE_OPTION_EMPTY);
+        env.Catch(cli::ERROR_CODE_OPTION_INVALID).Flag('e', "", "empty long name");
+        COUT(env.Feed(argc, argv), cli::ERROR_CODE_OPTION_INVALID);
+    }
+
+    DESC("option name is invalid, begin with -");
+    {
+        cli::CEnvBase env;
+        env.Catch(cli::ERROR_CODE_OPTION_INVALID).Flag('e', "-empty", "empty long name");
+        COUT(env.Feed(argc, argv), cli::ERROR_CODE_OPTION_INVALID);
+    }
+
+    DESC("option name is invalid, has =");
+    {
+        cli::CEnvBase env;
+        env.Catch(cli::ERROR_CODE_OPTION_INVALID).Flag('e', "empty=on", "empty long name");
+        COUT(env.Feed(argc, argv), cli::ERROR_CODE_OPTION_INVALID);
     }
 
     DESC("option name is duplicated");
@@ -52,7 +66,7 @@ DEF_TAST(error_catchmore, "catch more error at one time")
     const char* argv[] = {"./exe", "file", nullptr};
 
     cli::CEnvBase env1;
-    env1.Catch(cli::ERROR_CODE_OPTION_EMPTY)
+    env1.Catch(cli::ERROR_CODE_OPTION_INVALID)
         .Catch(cli::ERROR_CODE_OPTION_REDEFINE)
         .Catch(cli::ERROR_CODE_FLAG_INVALID)
         .Catch(cli::ERROR_CODE_FLAG_REDEFINE)
@@ -63,7 +77,7 @@ DEF_TAST(error_catchmore, "catch more error at one time")
         .Flag('e', "effect", "with same short name");
     COUT(env1.Feed(argc, argv) != 0, true);
 
-    int errors[] = {cli::ERROR_CODE_OPTION_EMPTY, cli::ERROR_CODE_OPTION_REDEFINE, cli::ERROR_CODE_FLAG_INVALID, cli::ERROR_CODE_FLAG_REDEFINE};
+    int errors[] = {cli::ERROR_CODE_OPTION_INVALID, cli::ERROR_CODE_OPTION_REDEFINE, cli::ERROR_CODE_FLAG_INVALID, cli::ERROR_CODE_FLAG_REDEFINE};
     cli::CEnvBase env2;
     env2.Catch(errors, sizeof(errors)/sizeof(errors[0]))
         .Option('e', "empty", "non-empty long name")
@@ -91,11 +105,11 @@ DEF_TAST(error_catchall, "catch all error")
     DESC("ignore option name is empty");
     {
         cli::CEnvBase env;
-        env.CatchAll().Ignore(cli::ERROR_CODE_OPTION_EMPTY)
+        env.CatchAll().Ignore(cli::ERROR_CODE_OPTION_INVALID)
             .Flag('e', "", "empty long name");
         int nFeed = env.Feed(argc, argv);
         COUT(nFeed);
-        COUT(nFeed != cli::ERROR_CODE_OPTION_EMPTY, true);
+        COUT(nFeed != cli::ERROR_CODE_OPTION_INVALID, true);
     }
 
     DESC("ignore option letter is invalid");
@@ -212,18 +226,49 @@ DEF_TAST(error_argument3, "test error of option in argument input")
     }
 }
 
+DEF_TAST(error_subcmd_name, "test error on subcommand name")
+{
+    cli::CEnvBase env1, env2;
+    int argc = 2;
+    const char* argv[] = {"./exe", "file", nullptr};
+    {
+        cli::CEnvBase env;
+        env.Catch(cli::ERROR_CODE_SUBCMD_INVALID)
+            .SubCommand("cmd1", "", env1).SubCommand("cmd2", "", env2);
+        COUT(env.Feed(argc, argv), 0);
+    }
+    {
+        cli::CEnvBase env;
+        env.Catch(cli::ERROR_CODE_SUBCMD_INVALID)
+            .SubCommand("", "description", env1).SubCommand("cmd2", "", env2);
+        COUT(env.Feed(argc, argv), cli::ERROR_CODE_SUBCMD_INVALID);
+    }
+    {
+        cli::CEnvBase env;
+        env.Catch(cli::ERROR_CODE_SUBCMD_INVALID)
+            .SubCommand("-cmd1", "description", env1).SubCommand("cmd2", "", env2);
+        COUT(env.Feed(argc, argv), cli::ERROR_CODE_SUBCMD_INVALID);
+    }
+    {
+        cli::CEnvBase env;
+        env.Catch(cli::ERROR_CODE_SUBCMD_INVALID)
+            .SubCommand("cmd=1", "description", env1).SubCommand("cmd2", "", env2);
+        COUT(env.Feed(argc, argv), cli::ERROR_CODE_SUBCMD_INVALID);
+    }
+}
+
 DEF_TAST(error_subcmd, "test error on subcommand")
 {
     cli::CEnvBase env, env1, env2;
     env.SubCommand("cmd1", "", env1).SubCommand("cmd2", "", env2)
-        .Catch(cli::ERROR_CODE_COMMAND_UNSUPPORTED);
+        .Catch(cli::ERROR_CODE_COMMAND_UNKNOWN);
 
     DESC("on subcommand report error");
     {
         int argc = 3;
         const char* argv[] = {"./exe", "cmd", "file", nullptr};
         env.ClearError();
-        COUT(env.Feed(argc, argv), cli::ERROR_CODE_COMMAND_UNSUPPORTED);
+        COUT(env.Feed(argc, argv), cli::ERROR_CODE_COMMAND_UNKNOWN);
     }
 
     DESC("has subcommand in argv[1]");
@@ -251,6 +296,32 @@ DEF_TAST(error_subcmd, "test error on subcommand")
         int argc = 3;
         const char* argv[] = {"cmd2", "--", "file", nullptr};
         env.ClearError();
+        COUT(env.Feed(argc, argv), 0);
+    }
+}
+
+DEF_TAST(error_bind_position, "test postion argument bind index")
+{
+    int argc = 4;
+    const char* argv[] = {"./exe", "file", "file2", "file3", nullptr};
+    {
+        cli::CEnvBase env;
+        env.Catch(cli::ERROR_CODE_POSITION_BIND)
+            .Set("#10 --bind=", "description");
+        COUT(env.Feed(argc, argv), cli::ERROR_CODE_POSITION_BIND);
+    }
+    {
+        cli::CEnvBase env;
+        env.Catch(cli::ERROR_CODE_POSITION_BIND)
+            .Set("#1 --input=", "description")
+            .Set("#1 --output=", "description");
+        COUT(env.Feed(argc, argv), cli::ERROR_CODE_POSITION_BIND);
+    }
+    {
+        cli::CEnvBase env;
+        env.Catch(cli::ERROR_CODE_POSITION_BIND)
+            .Set("#1 --input=", "description")
+            .Set("#2 --output=", "description");
         COUT(env.Feed(argc, argv), 0);
     }
 }
@@ -350,9 +421,9 @@ DEF_TAST(error_report, "test custom error report handle")
     const char* argv[] = {"./exe", "file", nullptr};
     {
         cli::CEnvBase env;
-        env.Catch(cli::ERROR_CODE_OPTION_EMPTY).Flag('e', "", "empty long name");
-        COUT(env.Feed(argc, argv), cli::ERROR_CODE_OPTION_EMPTY);
-        COUT(s_myError, cli::ERROR_CODE_OPTION_EMPTY);
+        env.Catch(cli::ERROR_CODE_OPTION_INVALID).Flag('e', "", "empty long name");
+        COUT(env.Feed(argc, argv), cli::ERROR_CODE_OPTION_INVALID);
+        COUT(s_myError, cli::ERROR_CODE_OPTION_INVALID);
     }
     {
         cli::CEnvBase env;

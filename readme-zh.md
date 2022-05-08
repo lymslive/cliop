@@ -287,7 +287,7 @@ env.Option('o', "option", "option with argument")
 ，如：
 
 ```cpp
-int nError = env.StrictParser().Feed(argc, argv);
+int nError = env.SetOptionOnly().Feed(argc, argv);
 ```
 
 这可能检测到用户意外将选项名拼写错误的情况，可由客户程序自己决定是否开启。
@@ -617,17 +617,76 @@ env.SubCommand("foo", "description test", subcmd_function)
 也会再尝试通过 `argv[0]` 或 `program_invocation_short_name` 寻找子命令。另外，
 客户程序若有特殊需求时，也大可按需重新构建 `argv[]` 传给 `CEnvBase::Feed()` 。
 
-## 未定义行为
+### 错误处理
 
-本库不使用异常，且很多方法为了链式调用的便利性返回 `*this` 而无从返回错误码。
-所以有些用法明显不合理、用户应该避免的情况，没作特别处理，故其行为未定义。未定
-义的意思是取决于实现，当前的实现或许可接受，但不保证后续开发迭代时兼容逻辑。
+在默认情况下，`CEnvBase::Feed()` 方法将尽可能读入并解析命令行参数，只有显式的
+`--help` 或 `--version` 会提前返回一个特殊错误码 `ERROR_CODE_HELP` ，否则将进
+入 `Run()` 方法或注册的处理函数，返回后者的返回值。而如果没有重写 `Run()` 方法
+也没有注册处理函数，则 `Feed()` 一般会返回 `0` ，让调用者继续处理业务逻辑。
 
-以下是一些未定义行为列表（未必齐全）：
+可以显式要求 `CEnvBase` 对象在解析命令行参数时捕获某些错误。比如上文提及的
+`SubCommandOnly()` 与 `SetOptionOnly()` 就是两个常用方法：只允许用户输入已预设
+的子命令或选项。将选项设置为必须输入也是另一种显式要求。
 
-* 设定长选项名为空
-* 设定长选项名重复
-* 设定短选项名重复
+#### 捕获与忽略错误的一般方法
+
+其实有更一般的 `Catch()` 方法来预声明捕获某个（些错误），如：
+
+```cpp
+// using namespace cli;
+env.Catch(ERROR_CODE_COMMAND_UNKNOWN).Catch(ERROR_CODE_OPTION_UNKNOWN);
+
+// 或等效地：
+int errors[] = {ERROR_CODE_COMMAND_UNKNOWN, ERROR_CODE_OPTION_UNKNOWN};
+env.Catch(errors, sizeof(errors)/sizeof(errors[0]));
+```
+
+也可用 `CatchAll()` 方法捕获所有能处理的错误，然后相应地有 `Ignore()` 方法忽略
+某些错误。例如要求捕获所有处理，但是允许未定义选项，也可忽略读配置文件：
+
+```cpp
+env.CatchAll().Ignore(ERROR_CODE_OPTION_UNKNOWN).Ignore(ERROR_CODE_CONFIG_UNREADABLE);
+```
+
+但是若用 `Set()` 设置为必须输入的选项如 `--option=?` ，它所触发的错误是不能忽
+略的，毕竟这两个要求是矛盾的。
+
+#### 错误码列表
+
+本库定义的错误码在 `cli::ErrorCode` 枚举类型中。详情请参考相关注释或文档。
+
+用 `Catch()` 方法捕获这些错误码，需要在 `Feed()` 解析参数之前调用，部分规范选
+项、子命令设计的错误，还应在设置选项、子命令之前调用。
+
+#### 自定义错误报告函数
+
+当检测到错误时，默认情况下将向标准错误 `stderr` 打印一行信息，以提示用户使用错
+误。但是也允许客户程序提供自己的错误报告函数，例如：
+
+```cpp
+void my_error_report(int code, const std::string& text)
+{
+    // todo ...
+    fprintf(stdout, "MY-E%d: %s\n", code, text.c_str());
+}
+
+auto save_handler = cli::SetErrorHandler(my_error_report);
+// 这里触发错误将调用 my_error_report
+cli::SetErrorHandler(save_handler);
+```
+
+错误报告或处理函数将接收两个参数，整数型的错误码及相应的描叙字符串。
+
+自由函数 `cli::SetErrorHandler()` 用于注册错误处理函数，并且返回原来的处理函数
+，如有需要可以保存下来以备后来回滚之用。
+
+#### 未定义行为
+
+其他未处理的错误，或暂称其为未定义行为。未定义的意思是取决于实现，当前的实现或
+许可接受，但不保证后续开发迭代时兼容逻辑。
+
+以下是一些明显不合理的未定义行为列表（未必齐全），用户宜尽量避免：
+
 * 注册子命令名为空，或重复
 * 对无参数的 Flag 选项取值
 

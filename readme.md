@@ -346,7 +346,7 @@ option, if you want to check if there is an option input that is not within
 the range of preset options, you can turn on strict parsing mode. For example:
 
 ```cpp
-int nError = env.StrictParser().Feed(argc, argv);
+int nError = env.SetOptionOnly().Feed(argc, argv);
 ```
 
 This may detect that the user accidentally misspelled the option name, and it is up to the client program to decide whether to turn it on or not.

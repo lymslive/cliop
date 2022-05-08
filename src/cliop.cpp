@@ -29,6 +29,12 @@ static void ReportError(int code, const std::string& text)
     fprintf(stderr, "E%d: %s\n", code, text.c_str());
 }
 
+// invalid argument, option name or subcommand name
+inline bool IsInvalidArgument(const std::string& strArg)
+{
+    return (strArg.empty() || strArg[0] == '-' || strArg.find('=') != std::string::npos);
+}
+
 struct CErrorTips
 {
     std::map<int, std::string> m_mapTips;
@@ -36,19 +42,23 @@ struct CErrorTips
     CErrorTips()
     {
         m_mapTips[ERROR_CODE_HELP] = "ony show information as demanded";
-        m_mapTips[ERROR_CODE_COMMAND_UNSUPPORTED] = "unsupported command";
+        m_mapTips[ERROR_CODE_COMMAND_UNKNOWN] = "unsupported command";
         m_mapTips[ERROR_CODE_OPTION_INCOMPLETE] = "no argument for the last option";
         m_mapTips[ERROR_CODE_CONFIG_UNREADABLE] = "can't read config file";
         m_mapTips[ERROR_CODE_CONFIG_INVALID] = "config line may confuse or invalid";
         m_mapTips[ERROR_CODE_ARGUMENT_INVALID] = "argument may confuse or invalid";
         m_mapTips[ERROR_CODE_ARGTYPE_UNMATCH] = "argument bound type is unmatch";
+        m_mapTips[ERROR_CODE_POSITION_BIND] = "position argument bound index mistake";
         m_mapTips[ERROR_CODE_OPTION_REQUIRED] = "required option absent";
         m_mapTips[ERROR_CODE_OPTION_UNKNOWN] = "unexpected option encountered";
 
-        m_mapTips[ERROR_CODE_OPTION_EMPTY] = "option long name is empty";
+        m_mapTips[ERROR_CODE_OPTION_INVALID] = "option name may confuse or invalid";
         m_mapTips[ERROR_CODE_OPTION_REDEFINE] = "option name is redefined";
         m_mapTips[ERROR_CODE_FLAG_INVALID] = "flag letter invalid";
         m_mapTips[ERROR_CODE_FLAG_REDEFINE] = "flag letter is redefined";
+
+        m_mapTips[ERROR_CODE_SUBCMD_INVALID] = "sub-command name may confuse or invalid";
+        m_mapTips[ERROR_CODE_SUBCMD_REDEFINE] = "sub-command name is redefined";
     }
 };
 
@@ -127,8 +137,7 @@ int CEnvBase::Feed(const std::vector<std::string>& vecArgs)
 {
     ClearArgument();
 
-    ParseCmdline(vecArgs);
-    CHECK_ERROR;
+    ParseCmdline(vecArgs); CHECK_ERROR;
 
     if(Has(OPTION_NAME_HELP) && m_pSubCommand == nullptr)
     {
@@ -141,21 +150,18 @@ int CEnvBase::Feed(const std::vector<std::string>& vecArgs)
         return ERROR_CODE_HELP;
     }
 
-    MoveArgument();
+    MoveArgument(); CHECK_ERROR;
 
     // read config file
     std::vector<std::string> cfgArgs;
     std::string strFile = Get(OPTION_NAME_CONFIG);
     if (strFile != "NONE")
     {
-        ReadConfig(strFile, cfgArgs);
-        CHECK_ERROR;
-        ParseCmdline(cfgArgs);
-        CHECK_ERROR;
+        ReadConfig(strFile, cfgArgs); CHECK_ERROR;
+        ParseCmdline(cfgArgs); CHECK_ERROR;
     }
 
-    GetBind();
-    CHECK_ERROR;
+    GetBind(); CHECK_ERROR;
 
     if (!CheckRequiredOption())
     {
@@ -209,10 +215,10 @@ int CEnvBase::Feed(int argc, const char* argv[])
         return nRet;
     }
 
-    if (!m_pSubCommand && !m_vecCommand.empty() && m_stError.IsCatch(ERROR_CODE_COMMAND_UNSUPPORTED))
+    if (!m_pSubCommand && !m_vecCommand.empty() && m_stError.IsCatch(ERROR_CODE_COMMAND_UNKNOWN))
     {
-        m_stError.SetError(ERROR_CODE_COMMAND_UNSUPPORTED, argc > 1 ? argv[1] : argv[0]);
-        return ERROR_CODE_COMMAND_UNSUPPORTED;
+        m_stError.SetError(ERROR_CODE_COMMAND_UNKNOWN, argc > 1 ? argv[1] : argv[0]);
+        return ERROR_CODE_COMMAND_UNKNOWN;
     }
 
     if (m_pSubCommand && m_pSubCommand->m_fnHandler)
@@ -510,8 +516,7 @@ CEnvBase& CEnvBase::SubCommand(const std::string& strName, const std::string& st
 {
     CommandInfo stCommand(strName, strDescription);
     stCommand.m_fnHandler = fnHandler;
-    m_vecCommand.push_back(stCommand);
-    return *this;
+    return AddCommand(stCommand);
 }
 
 CEnvBase& CEnvBase::SubCommand(const std::string& strName, const std::string& strDescription, CEnvBase& stEnvBase)
@@ -519,13 +524,30 @@ CEnvBase& CEnvBase::SubCommand(const std::string& strName, const std::string& st
     CommandInfo stCommand(strName, strDescription);
     stCommand.m_pEnvBase = &stEnvBase;
     stCommand.m_pEnvBase->Command(strName, strDescription);
+    return AddCommand(stCommand);
+}
+
+CEnvBase& CEnvBase::AddCommand(const CommandInfo& stCommand)
+{
+    if (m_stError.IsCatch(ERROR_CODE_SUBCMD_INVALID) && IsInvalidArgument(stCommand.m_strName))
+    {
+        m_stError.SetError(ERROR_CODE_SUBCMD_INVALID, stCommand.m_strName);
+        return *this;
+    }
+
+    if (m_stError.IsCatch(ERROR_CODE_SUBCMD_REDEFINE) && FindCommand(stCommand.m_strName) != nullptr)
+    {
+        m_stError.SetError(ERROR_CODE_SUBCMD_REDEFINE, stCommand.m_strName);
+        return *this;
+    }
+
     m_vecCommand.push_back(stCommand);
     return *this;
 }
 
 CEnvBase& CEnvBase::SubCommandOnly()
 {
-    Catch(ERROR_CODE_COMMAND_UNSUPPORTED);
+    Catch(ERROR_CODE_COMMAND_UNKNOWN);
     return *this;
 }
 
@@ -537,22 +559,16 @@ CEnvBase& CEnvBase::SetOptionOnly()
 
 CEnvBase& CEnvBase::AddOption(const COption& stOption)
 {
-    if (m_stError.IsCatch(ERROR_CODE_OPTION_EMPTY))
+    if (m_stError.IsCatch(ERROR_CODE_OPTION_INVALID) && IsInvalidArgument(stOption.m_strLongName))
     {
-        if (stOption.m_strLongName.empty())
-        {
-            m_stError.SetError(ERROR_CODE_OPTION_EMPTY);
-            return *this;
-        }
+        m_stError.SetError(ERROR_CODE_OPTION_INVALID, stOption.m_strLongName);
+        return *this;
     }
 
-    if (m_stError.IsCatch(ERROR_CODE_OPTION_REDEFINE))
+    if (m_stError.IsCatch(ERROR_CODE_OPTION_REDEFINE) && FindOption(stOption.m_strLongName) != nullptr)
     {
-        if (FindOption(stOption.m_strLongName) != nullptr)
-        {
-            m_stError.SetError(ERROR_CODE_OPTION_REDEFINE, stOption.m_strLongName);
-            return *this;
-        }
+        m_stError.SetError(ERROR_CODE_OPTION_REDEFINE, stOption.m_strLongName);
+        return *this;
     }
 
     if (m_stError.IsCatch(ERROR_CODE_FLAG_INVALID))
@@ -961,13 +977,10 @@ void CEnvBase::SaveOption(const COption& stOption, const std::string& strArg)
 
 bool CEnvBase::CheckOptionArgument(const std::string& strArg)
 {
-    if (m_stError.IsCatch(ERROR_CODE_ARGUMENT_INVALID))
+    if (m_stError.IsCatch(ERROR_CODE_ARGUMENT_INVALID) && IsInvalidArgument(strArg))
     {
-        if (strArg.empty() || strArg[0] == '-' || strArg.find('=') != std::string::npos)
-        {
-            m_stError.SetError(ERROR_CODE_ARGUMENT_INVALID, strArg);
-            return false;
-        }
+        m_stError.SetError(ERROR_CODE_ARGUMENT_INVALID, strArg);
+        return false;
     }
     return true;
 }
@@ -1015,9 +1028,27 @@ void CEnvBase::MoveArgument()
     std::vector<COption*> vecOptions(nSize, nullptr);
     for (auto it = m_vecOptions.begin(); it != m_vecOptions.end(); ++it)
     {
+        if (it->m_iBindIndex == 0)
+        {
+            continue;
+        }
         if (it->m_iBindIndex > 0 && it->m_iBindIndex <= nSize)
         {
+            if (vecOptions[it->m_iBindIndex - 1] != nullptr && m_stError.IsCatch(ERROR_CODE_POSITION_BIND))
+            {
+                std::string strText = "redefined of ";
+                strText.append(it->m_strLongName).append("#").append(std::to_string(it->m_iBindIndex));
+                m_stError.SetError(ERROR_CODE_POSITION_BIND, strText);
+                return;
+            }
             vecOptions[it->m_iBindIndex - 1] = &(*it);
+        }
+        else if(m_stError.IsCatch(ERROR_CODE_POSITION_BIND))
+        {
+            std::string strText = "beyond range of ";
+            strText.append(it->m_strLongName).append("#").append(std::to_string(it->m_iBindIndex));
+            m_stError.SetError(ERROR_CODE_POSITION_BIND, strText);
+            return;
         }
     }
 

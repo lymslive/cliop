@@ -168,6 +168,6 @@ DEF_TAST(subcmd_invalid, "test invalid sub commmand")
         env.ClearArgument();
         int argc = 4;
         const char* argv[] = {"./math", "div", "9", "3", nullptr};
-        COUT(env.Feed(argc, argv), cli::ERROR_CODE_COMMAND_UNSUPPORTED);
+        COUT(env.Feed(argc, argv), cli::ERROR_CODE_COMMAND_UNKNOWN);
     }
 }

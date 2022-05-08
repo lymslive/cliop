@@ -20,19 +20,27 @@ namespace cli
 enum ErrorCode
 {
     ERROR_CODE_HELP = 0xABCDE0,    //< for --help or --version
-    ERROR_CODE_COMMAND_UNSUPPORTED,//< invalid command in argv[1]
+
+    // specify catch before Feed()
+    ERROR_CODE_COMMAND_UNKNOWN,    //< unexpected command in argv[1]
     ERROR_CODE_OPTION_INCOMPLETE,  //< no argument for the last option
     ERROR_CODE_CONFIG_UNREADABLE,  //< can not read config file
     ERROR_CODE_CONFIG_INVALID,     //< config line may confuse or invalid
     ERROR_CODE_ARGUMENT_INVALID,   //< argument may confuse or invalid
     ERROR_CODE_ARGTYPE_UNMATCH,    //< argument bound type is unmatch
+    ERROR_CODE_POSITION_BIND,      //< position argument bound index mistake
     ERROR_CODE_OPTION_REQUIRED,    //< required option absent
     ERROR_CODE_OPTION_UNKNOWN,     //< unexpected option encountered
 
-    ERROR_CODE_OPTION_EMPTY,       //< option long name is empty
+    // specify catch before Option() or Set()
+    ERROR_CODE_OPTION_INVALID,     //< option name may confuse or invalid
     ERROR_CODE_OPTION_REDEFINE,    //< option name is redefined
     ERROR_CODE_FLAG_INVALID,       //< flag letter invalid
     ERROR_CODE_FLAG_REDEFINE,      //< flag letter is redefined
+
+    // specify catch before SubCommand()
+    ERROR_CODE_SUBCMD_INVALID,     //< sub-command name may confuse or invalid
+    ERROR_CODE_SUBCMD_REDEFINE,    //< sub-command is redefined
 
     ERROR_CODE_END
 };
@@ -305,6 +313,9 @@ public:
      * */
     CEnvBase& SubCommand(const std::string& strName, const std::string& strDescription, FCommandHandler fnHandler);
     CEnvBase& SubCommand(const std::string& strName, const std::string& strDescription, CEnvBase& stEnvBase);
+
+    /** Add a pre-build sub-command, return self. */
+    CEnvBase& AddCommand(const CommandInfo& stCommand);
 
     /** Set strict sub-command mode, check argv[1] must be valid command. */
     CEnvBase& SubCommandOnly();
