@@ -136,7 +136,7 @@ DEF_TAST(cliop_option2_required, "custome and check required option")
         .Required('A', "abc", "abc option");
 
     int nFeed = env.Feed(vecArgs);
-    COUT(nFeed, 2);
+    COUT(nFeed, cli::ERROR_CODE_OPTION_REQUIRED);
     COUT(nFeed == 0, false);
 
     const cli::CArgument& stArgRecv = env.GetArgument();
@@ -168,10 +168,10 @@ DEF_TAST(cliop_option3_unexpected, "check unexpected option")
     COUT(env.Has("inline"), false);
     COUT(env.Has("good"), false);
 
-    DESC("set strict parser");
+    DESC("set strict parser, only accept registered option");
     env.ClearArgument();
-    nFeed = env.StrictParser().Feed(vecArgs);
-    COUT(nFeed, 3);
+    nFeed = env.SetOptionOnly().Feed(vecArgs);
+    COUT(nFeed, cli::ERROR_CODE_OPTION_UNKNOWN);
     COUT(nFeed == 0, false);
 
     DESC("report error, but still save received argument");
@@ -241,7 +241,7 @@ DEF_TAST(cliop_set1, "test common set option")
     env.ClearArgument();
     vecArgs.clear();
     nFeed = env.Feed(vecArgs);
-    COUT(nFeed, 1);
+    COUT(nFeed, cli::ERROR_CODE_OPTION_REQUIRED);
 
     env.ClearArgument();
     vecArgs.clear();

@@ -10,6 +10,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
 #include <functional>
 
 namespace cli
@@ -19,8 +20,68 @@ namespace cli
 enum ErrorCode
 {
     ERROR_CODE_HELP = 0xABCDE0,    //< for --help or --version
-    ERROR_CODE_COMMAND_INVALID,    //< invalid command in argv[1]
+    ERROR_CODE_COMMAND_UNSUPPORTED,//< invalid command in argv[1]
     ERROR_CODE_OPTION_INCOMPLETE,  //< no argument for the last option
+    ERROR_CODE_CONFIG_UNREADABLE,  //< can not read config file
+    ERROR_CODE_CONFIG_INVALID,     //< config line may confuse or invalid
+    ERROR_CODE_ARGUMENT_INVALID,   //< argument may confuse or invalid
+    ERROR_CODE_ARGTYPE_UNMATCH,    //< argument bound type is unmatch
+    ERROR_CODE_OPTION_REQUIRED,    //< required option absent
+    ERROR_CODE_OPTION_UNKNOWN,     //< unexpected option encountered
+
+    ERROR_CODE_OPTION_EMPTY,       //< option long name is empty
+    ERROR_CODE_OPTION_REDEFINE,    //< option name is redefined
+    ERROR_CODE_FLAG_INVALID,       //< flag letter invalid
+    ERROR_CODE_FLAG_REDEFINE,      //< flag letter is redefined
+
+    ERROR_CODE_END
+};
+
+/** Error handler function type.
+ * @param [IN] code: the error code.
+ * @param [IN] text: the error description.
+ * */
+typedef std::function<void (int code, const std::string& text)> FErrorHandler;
+
+/** Set a new error handler function, return the old one.
+ * @note The default error handle only printf to stderr, if no one provided.
+ * */
+FErrorHandler SetErrorHandler(FErrorHandler fn);
+
+/** Error code in runtime. */
+class CErrorRun
+{
+    std::set<int> m_setCatch;      //< only catch these errors
+    std::string m_strContext;      //< extra context information for m_nError
+    int m_nError = 0;              //< current or last error code
+
+public:
+    /** Get last error code. */
+    int Code() { return m_nError; }
+
+    /** Get error string for last, basic description appended by contex. */
+    std::string String();
+
+    /** Convertion to bool, error 0 means true. */
+    operator bool() { return m_nError == 0; }
+
+    /** Convertion to int, which is the error code. */
+    operator int()  { return Code(); }
+
+    /** Convertion to string, the description for error. */
+    operator std::string() { return String(); }
+
+    /** Catch the specified error code in later process. */
+    void CatchError(int code) { m_setCatch.insert(code); }
+
+    /** Ignore the specified error code in later process. */
+    void IgnoreError(int code) { m_setCatch.erase(code); }
+
+    /** Check wheter will catch the error specified code. */
+    bool IsCatch(int code) { return m_setCatch.count(code) > 0; }
+
+    /** Set error code with context information. */
+    void SetError(int code, const std::string& context = "");
 };
 
 /** Option Attribute Constant: the option has following argument. */
@@ -120,13 +181,13 @@ class CEnvBase
     std::vector<COption> m_vecOptions; //< option setup
     std::map<std::string, COptionBind> m_mapBind; //< option bind
     CArgument m_stArgRecv;             //< actually received option and argument
-    bool m_bStrictParser = false;      //< parse cmdline in strict mode
-    bool m_bSubCommandOnly = false;    //< check sub-command in strict mode
 
     std::string m_strVersion;          //< command version
     CommandInfo m_stCommand;           //< command detail and handle
     std::vector<CommandInfo> m_vecCommand; //< sub-commands
     CommandInfo* m_pSubCommand = nullptr; //< current sub-command
+
+    CErrorRun m_stError;     //< runtime error, only save the last one
 
 public:
 
@@ -217,9 +278,6 @@ public:
     /** Get the actually received argument struct, with a map and vector.*/
     const CArgument& GetArgument() { return m_stArgRecv; }
 
-    /** Set use strict parser, or rest if pass false. */
-    CEnvBase& StrictParser(bool tf = true);
-
     /** Set and get version string. */
     CEnvBase& Version(const std::string& strVersion);
     std::string Version() const;
@@ -249,7 +307,10 @@ public:
     CEnvBase& SubCommand(const std::string& strName, const std::string& strDescription, CEnvBase& stEnvBase);
 
     /** Set strict sub-command mode, check argv[1] must be valid command. */
-    CEnvBase& SubCommandOnly(bool tf = true);
+    CEnvBase& SubCommandOnly();
+
+    /** Set use strict parser, only allow option already set. */
+    CEnvBase& SetOptionOnly();
 
     /** Add a pre-build option, return self. */
     CEnvBase& AddOption(const COption& stOption);
@@ -330,6 +391,33 @@ public:
     /** Clear received argument, may be called before another Feed(); */
     void ClearArgument();
 
+    void ClearError();
+
+    /** Check if has any error. */
+    bool HasError() { return !m_stError; }
+
+    /** Catch one error code.
+     * @param [IN] code: one error code, @ref enum ErrorCode
+     * @return *this
+     * */
+    CEnvBase& Catch(int code);
+
+    /** Catch an array of error code.
+     * @param [IN] code: non-null pointer to an array
+     * @param [IN] size: the size of array
+     * @return *this
+     * */
+    CEnvBase& Catch(int* code, int size);
+
+    /** Catch all error code. */
+    CEnvBase& CatchAll();
+
+    /** Ingnore one error code. */
+    CEnvBase& Ignore(int code);
+
+    /** Ingore an array of error code. */
+    CEnvBase& Ignore(int* code, int size);
+
 private:
     /** Parse cmdline .
      * @param [IN] vecArgs: cmdline argument stored in vector.
@@ -354,8 +442,13 @@ private:
     COption* FindOption(char cShortName);
     COption* FindOption(const std::string& strLongName);
 
-    /** Find sub command. */
+    /** Find sub command by name. */
     CommandInfo* FindCommand(const std::string& strName);
+
+    /** Find sub command from argv[1] or argv[0].
+     * If argv[1] available sub command, `iShift` is set to 1.
+     * */
+    CommandInfo* FindCommand(int argc, const char* argv[], int& iShift);
 
     /** Save received position argument. */
     void SaveArgument(const std::string& strArg);
@@ -368,17 +461,14 @@ private:
     void SaveOption(const COption& stOption);
     void SaveOption(const COption& stOption, const std::string& strArg);
 
-    /** Check if some required option not provided.
-     * @return int: error code, 0 for success, otherwise means the count of
-     * unprovided option.
-     * */
-    int CheckRequiredOption();
+    /** Check if the argument for option in valid. */
+    bool CheckOptionArgument(const std::string& strArg);
 
-    /** Check if provide extra option that not setup.
-     * @return int: error code, 0 for success, otherwise means the count of
-     * extra unexpected option.
-     * */
-    int CheckExtraOption();
+    /** Check if all required options are provided. */
+    bool CheckRequiredOption();
+
+    /** Check if all option have been setup. */
+    bool CheckUnknownOption();
 
     /** Move some postion argument to option argument as setup.
      * Only move the first several continuous argument(s) to option if they

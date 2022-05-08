@@ -12,6 +12,77 @@ const char* OPTION_NAME_HELP = "help";
 const char* OPTION_NAME_CONFIG = "config";
 const char* OPTION_NAME_VERSION = "version";
 
+static FErrorHandler s_fnErrorReporter;
+FErrorHandler SetErrorHandler(FErrorHandler fn)
+{
+    FErrorHandler old = s_fnErrorReporter;
+    s_fnErrorReporter = fn;
+    return old;
+}
+
+static void ReportError(int code, const std::string& text)
+{
+    if (s_fnErrorReporter)
+    {
+        return s_fnErrorReporter(code, text);
+    }
+    fprintf(stderr, "E%d: %s\n", code, text.c_str());
+}
+
+struct CErrorTips
+{
+    std::map<int, std::string> m_mapTips;
+
+    CErrorTips()
+    {
+        m_mapTips[ERROR_CODE_HELP] = "ony show information as demanded";
+        m_mapTips[ERROR_CODE_COMMAND_UNSUPPORTED] = "unsupported command";
+        m_mapTips[ERROR_CODE_OPTION_INCOMPLETE] = "no argument for the last option";
+        m_mapTips[ERROR_CODE_CONFIG_UNREADABLE] = "can't read config file";
+        m_mapTips[ERROR_CODE_CONFIG_INVALID] = "config line may confuse or invalid";
+        m_mapTips[ERROR_CODE_ARGUMENT_INVALID] = "argument may confuse or invalid";
+        m_mapTips[ERROR_CODE_ARGTYPE_UNMATCH] = "argument bound type is unmatch";
+        m_mapTips[ERROR_CODE_OPTION_REQUIRED] = "required option absent";
+        m_mapTips[ERROR_CODE_OPTION_UNKNOWN] = "unexpected option encountered";
+
+        m_mapTips[ERROR_CODE_OPTION_EMPTY] = "option long name is empty";
+        m_mapTips[ERROR_CODE_OPTION_REDEFINE] = "option name is redefined";
+        m_mapTips[ERROR_CODE_FLAG_INVALID] = "flag letter invalid";
+        m_mapTips[ERROR_CODE_FLAG_REDEFINE] = "flag letter is redefined";
+    }
+};
+
+std::string CErrorRun::String()
+{
+    static CErrorTips s_text;
+    auto it = s_text.m_mapTips.find(m_nError);
+    if (it == s_text.m_mapTips.end())
+    {
+        return "";
+    }
+    std::string str = it->second;
+    if (!m_strContext.empty())
+    {
+        str.append(": ").append(m_strContext);
+    }
+    return str;
+}
+
+void CErrorRun::SetError(int code, const std::string& context)
+{
+    if (code == 0)
+    {
+        m_nError = 0;
+        m_strContext.clear();
+    }
+    else if (IsCatch(code))
+    {
+        m_nError = code;
+        m_strContext = context;
+        ReportError(Code(), String());
+    }
+}
+
 void ConvertValue(const std::string& src, int &dest)
 {
     dest = atoi(src.c_str());
@@ -50,9 +121,14 @@ COption::COption(const std::string& strLongName, const std::string strDescriptio
 COption::COption(char cShortName, const std::string& strLongName, const std::string strDescription)
     : m_cShortName(cShortName), m_strLongName(strLongName), m_strDescription(strDescription) {}
 
+#define CHECK_ERROR do { if (!m_stError) return m_stError.Code(); } while(0)
+
 int CEnvBase::Feed(const std::vector<std::string>& vecArgs)
 {
+    ClearArgument();
+
     ParseCmdline(vecArgs);
+    CHECK_ERROR;
 
     if(Has(OPTION_NAME_HELP) && m_pSubCommand == nullptr)
     {
@@ -73,23 +149,25 @@ int CEnvBase::Feed(const std::vector<std::string>& vecArgs)
     if (strFile != "NONE")
     {
         ReadConfig(strFile, cfgArgs);
+        CHECK_ERROR;
         ParseCmdline(cfgArgs);
+        CHECK_ERROR;
     }
 
     GetBind();
+    CHECK_ERROR;
 
-    int nRet = CheckRequiredOption();
-    if (nRet != 0)
+    if (!CheckRequiredOption())
     {
-        return nRet;
+        return ERROR_CODE_OPTION_REQUIRED;
     }
 
-    if (m_bStrictParser)
+    if (m_stError.IsCatch(ERROR_CODE_OPTION_UNKNOWN) && !CheckUnknownOption())
     {
-        nRet = CheckExtraOption();
+        return ERROR_CODE_OPTION_UNKNOWN;
     }
 
-    return nRet;
+    return 0;
 }
 
 int CEnvBase::Feed(int argc, char* argv[])
@@ -99,32 +177,20 @@ int CEnvBase::Feed(int argc, char* argv[])
 
 int CEnvBase::Feed(int argc, const char* argv[])
 {
+    if (argc <= 0 || argv == nullptr)
+    {
+        return -1;
+    }
+
+    CHECK_ERROR;
+
     if (m_stCommand.m_strName.empty())
     {
         Command(argv[0]);
     }
 
-    m_pSubCommand = nullptr;
     int iShift = 0;
-    if (!m_vecCommand.empty())
-    {
-        if (1 < argc && argv[1] != nullptr)
-        {
-            m_pSubCommand = FindCommand(argv[1]);
-            if (m_pSubCommand != nullptr)
-            {
-                iShift = 1;
-            }
-        }
-        if (m_pSubCommand == nullptr)
-        {
-            m_pSubCommand = FindCommand(argv[0]);
-        }
-        if (m_pSubCommand == nullptr)
-        {
-            m_pSubCommand = FindCommand(program_invocation_short_name);
-        }
-    }
+    m_pSubCommand = FindCommand(argc, argv, iShift);
 
     if (m_pSubCommand && m_pSubCommand->m_pEnvBase)
     {
@@ -143,9 +209,10 @@ int CEnvBase::Feed(int argc, const char* argv[])
         return nRet;
     }
 
-    if (m_pSubCommand == nullptr && m_bSubCommandOnly)
+    if (!m_pSubCommand && !m_vecCommand.empty() && m_stError.IsCatch(ERROR_CODE_COMMAND_UNSUPPORTED))
     {
-        return ERROR_CODE_COMMAND_INVALID;
+        m_stError.SetError(ERROR_CODE_COMMAND_UNSUPPORTED, argc > 1 ? argv[1] : argv[0]);
+        return ERROR_CODE_COMMAND_UNSUPPORTED;
     }
 
     if (m_pSubCommand && m_pSubCommand->m_fnHandler)
@@ -189,16 +256,19 @@ int CEnvBase::ParseCmdline(const std::vector<std::string>& vecArgs, size_t pos)
 
         if (pLastOption != nullptr)
         {
+            CheckOptionArgument(vecArgs[i]);
             SaveOption(*pLastOption, vecArgs[i]);
             pLastOption = nullptr;
             continue;
         }
-        if(!strLastOption.empty())
+        else if(!strLastOption.empty())
         {
+            CheckOptionArgument(vecArgs[i]);
             SaveOption(strLastOption, vecArgs[i]);
             strLastOption.clear();
             continue;
         }
+        CHECK_ERROR;
 
         std::string strArgTemp = vecArgs[i];
         size_t iDash= util::TrimLeft(strArgTemp, '-');
@@ -280,7 +350,12 @@ int CEnvBase::ParseCmdline(const std::vector<std::string>& vecArgs, size_t pos)
 
     if (pLastOption != nullptr || !strLastOption.empty())
     {
-        return ERROR_CODE_OPTION_INCOMPLETE;
+        if (m_stError.IsCatch(ERROR_CODE_OPTION_INCOMPLETE))
+        {
+            m_stError.SetError(ERROR_CODE_OPTION_INCOMPLETE,
+                    pLastOption != nullptr ? pLastOption->m_strLongName : strLastOption);
+            return ERROR_CODE_OPTION_INCOMPLETE;
+        }
     }
     return 0;
 }
@@ -399,12 +474,6 @@ bool CEnvBase::Get(size_t pos, std::string& strArg)
     return false;
 }
 
-CEnvBase& CEnvBase::StrictParser(bool tf /*= true*/)
-{
-    m_bStrictParser = tf;
-    return *this;
-}
-    
 CEnvBase& CEnvBase::Version(const std::string& strVersion)
 {
     m_strVersion = strVersion;
@@ -454,14 +523,58 @@ CEnvBase& CEnvBase::SubCommand(const std::string& strName, const std::string& st
     return *this;
 }
 
-CEnvBase& CEnvBase::SubCommandOnly(bool tf/* = true*/)
+CEnvBase& CEnvBase::SubCommandOnly()
 {
-    m_bSubCommandOnly = tf && m_vecCommand.size() > 0;
+    Catch(ERROR_CODE_COMMAND_UNSUPPORTED);
+    return *this;
+}
+
+CEnvBase& CEnvBase::SetOptionOnly()
+{
+    Catch(ERROR_CODE_OPTION_UNKNOWN);
     return *this;
 }
 
 CEnvBase& CEnvBase::AddOption(const COption& stOption)
 {
+    if (m_stError.IsCatch(ERROR_CODE_OPTION_EMPTY))
+    {
+        if (stOption.m_strLongName.empty())
+        {
+            m_stError.SetError(ERROR_CODE_OPTION_EMPTY);
+            return *this;
+        }
+    }
+
+    if (m_stError.IsCatch(ERROR_CODE_OPTION_REDEFINE))
+    {
+        if (FindOption(stOption.m_strLongName) != nullptr)
+        {
+            m_stError.SetError(ERROR_CODE_OPTION_REDEFINE, stOption.m_strLongName);
+            return *this;
+        }
+    }
+
+    if (m_stError.IsCatch(ERROR_CODE_FLAG_INVALID))
+    {
+        char c = stOption.m_cShortName;
+        if (c != '\0' && !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'))
+        {
+            m_stError.SetError(ERROR_CODE_FLAG_INVALID, std::string("char%").append(std::to_string((int)c)));
+            return *this;
+        }
+    }
+
+    if (m_stError.IsCatch(ERROR_CODE_FLAG_REDEFINE))
+    {
+        char c = stOption.m_cShortName;
+        if (c != '\0' && FindOption(c) != nullptr)
+        {
+            m_stError.SetError(ERROR_CODE_FLAG_REDEFINE, std::string(1, c));
+            return *this;
+        }
+    }
+
     m_vecOptions.push_back(stOption);
     return *this;
 }
@@ -624,33 +737,64 @@ void CEnvBase::GetBind()
         {
             continue;
         }
-        if (it->second.m_eValueType == OPTION_BOOL)
+
+        EOptionType eType = it->second.m_eValueType;
+        if (eType == OPTION_BOOL)
         {
             Get(it->first, *(static_cast<bool*>(it->second.m_pBindValue)));
+            continue;
         }
-        else if (it->second.m_eValueType == OPTION_STR)
+
+        std::string strArg = Get(it->first);
+        if (strArg.empty())
         {
-            Get(it->first, *(static_cast<std::string*>(it->second.m_pBindValue)));
+            continue;
         }
-        else if (it->second.m_eValueType == OPTION_INT)
+
+        if (m_stError.IsCatch(ERROR_CODE_ARGTYPE_UNMATCH))
         {
-            Get(it->first, *(static_cast<int*>(it->second.m_pBindValue)));
+            // only roughly detect int or double
+            if (eType == OPTION_INT || eType == OPTION_INT_LIST)
+            {
+                if (strArg.find_first_not_of("0123456789\0-", 0, 12) != std::string::npos)
+                {
+                    m_stError.SetError(ERROR_CODE_ARGTYPE_UNMATCH, strArg);
+                    return;
+                }
+            }
+            else if (eType == OPTION_DOUBLE || eType == OPTION_DOUBLE_LIST)
+            {
+                if (strArg.find_first_not_of("0123456789\0-.", 0, 13) != std::string::npos)
+                {
+                    m_stError.SetError(ERROR_CODE_ARGTYPE_UNMATCH, strArg);
+                    return;
+                }
+            }
         }
-        else if (it->second.m_eValueType == OPTION_DOUBLE)
+
+        if (eType == OPTION_STR)
         {
-            Get(it->first, *(static_cast<double*>(it->second.m_pBindValue)));
+            *(static_cast<std::string*>(it->second.m_pBindValue)) = strArg;
         }
-        else if (it->second.m_eValueType == OPTION_STR_LIST)
+        else if (eType == OPTION_INT)
         {
-            Get(it->first, *(static_cast<std::vector<std::string>*>(it->second.m_pBindValue)));
+            ConvertValue(strArg, *(static_cast<int*>(it->second.m_pBindValue)));
         }
-        else if (it->second.m_eValueType == OPTION_INT_LIST)
+        else if (eType == OPTION_DOUBLE)
         {
-            Get(it->first, *(static_cast<std::vector<int>*>(it->second.m_pBindValue)));
+            ConvertValue(strArg, *(static_cast<double*>(it->second.m_pBindValue)));
         }
-        else if (it->second.m_eValueType == OPTION_DOUBLE_LIST)
+        else if (eType == OPTION_STR_LIST)
         {
-            Get(it->first, *(static_cast<std::vector<double>*>(it->second.m_pBindValue)));
+            ConvertValue(strArg, *(static_cast<std::vector<std::string>*>(it->second.m_pBindValue)));
+        }
+        else if (eType == OPTION_INT_LIST)
+        {
+            ConvertValue(strArg, *(static_cast<std::vector<int>*>(it->second.m_pBindValue)));
+        }
+        else if (eType == OPTION_DOUBLE_LIST)
+        {
+            ConvertValue(strArg, *(static_cast<std::vector<double>*>(it->second.m_pBindValue)));
         }
     }
 }
@@ -659,6 +803,50 @@ void CEnvBase::ClearArgument()
 {
     m_stArgRecv.m_mapArgs.clear();
     m_stArgRecv.m_vecArgs.clear();
+}
+
+void CEnvBase::ClearError()
+{
+    m_stError.SetError(0);
+}
+
+CEnvBase& CEnvBase::Catch(int code)
+{
+    m_stError.CatchError(code);
+    return *this;
+}
+
+CEnvBase& CEnvBase::Catch(int* code, int size)
+{
+    for (int i = 0; i < size; ++i)
+    {
+        m_stError.CatchError(code[i]);
+    }
+    return *this;
+}
+
+CEnvBase& CEnvBase::CatchAll()
+{
+    for (int i = ERROR_CODE_HELP; i < ERROR_CODE_END; ++i)
+    {
+        m_stError.CatchError(i);
+    }
+    return *this;
+}
+
+CEnvBase& CEnvBase::Ignore(int code)
+{
+    m_stError.IgnoreError(code);
+    return *this;
+}
+
+CEnvBase& CEnvBase::Ignore(int* code, int size)
+{
+    for (int i = 0; i < size; ++i)
+    {
+        m_stError.IgnoreError(code[i]);
+    }
+    return *this;
 }
 
 COption* CEnvBase::FindOption(char cShortName)
@@ -695,6 +883,34 @@ CommandInfo* CEnvBase::FindCommand(const std::string& strName)
         }
     }
     return nullptr;
+}
+
+CommandInfo* CEnvBase::FindCommand(int argc, const char* argv[], int& iShift)
+{
+    if (m_vecCommand.empty())
+    {
+        return nullptr;
+    }
+
+    CommandInfo* pSubCommand = nullptr;
+    if (1 < argc && argv[1] != nullptr)
+    {
+        pSubCommand = FindCommand(argv[1]);
+        if (pSubCommand != nullptr)
+        {
+            iShift = 1;
+        }
+    }
+    if (pSubCommand == nullptr)
+    {
+        pSubCommand = FindCommand(argv[0]);
+    }
+    if (pSubCommand == nullptr)
+    {
+        pSubCommand = FindCommand(program_invocation_short_name);
+    }
+
+    return pSubCommand;
 }
 
 void CEnvBase::SaveArgument(const std::string& strArg)
@@ -743,30 +959,44 @@ void CEnvBase::SaveOption(const COption& stOption, const std::string& strArg)
     }
 }
 
-int CEnvBase::CheckRequiredOption()
+bool CEnvBase::CheckOptionArgument(const std::string& strArg)
+{
+    if (m_stError.IsCatch(ERROR_CODE_ARGUMENT_INVALID))
+    {
+        if (strArg.empty() || strArg[0] == '-' || strArg.find('=') != std::string::npos)
+        {
+            m_stError.SetError(ERROR_CODE_ARGUMENT_INVALID, strArg);
+            return false;
+        }
+    }
+    return true;
+}
+
+bool CEnvBase::CheckRequiredOption()
 {
     int nCount = 0;
     for (auto it = m_vecOptions.begin(); it != m_vecOptions.end(); ++it)
     {
         if (it->m_bRequired && m_stArgRecv.m_mapArgs.count(it->m_strLongName) == 0)
         {
-            nCount++;
+            m_stError.SetError(ERROR_CODE_OPTION_REQUIRED, it->m_strLongName);
+            return false;
         }
     }
-    return nCount;
+    return true;
 }
 
-int CEnvBase::CheckExtraOption()
+bool CEnvBase::CheckUnknownOption()
 {
-    int nCount = 0;
     for (auto it = m_stArgRecv.m_mapArgs.begin(); it != m_stArgRecv.m_mapArgs.end(); ++it)
     {
         if (nullptr == FindOption(it->first))
         {
-            nCount++;
+            m_stError.SetError(ERROR_CODE_OPTION_UNKNOWN, it->first);
+            return false;
         }
     }
-    return nCount;
+    return true;
 }
 
 void CEnvBase::MoveArgument()
@@ -821,6 +1051,10 @@ void CEnvBase::ReadConfig(const std::string& strFile, std::vector<std::string>& 
     std::ifstream fin(strFile);
 	if (!fin)
 	{
+        if (m_stError.IsCatch(ERROR_CODE_CONFIG_UNREADABLE))
+        {
+            m_stError.SetError(ERROR_CODE_CONFIG_UNREADABLE, strFile);
+        }
 		return;
 	}
 
@@ -870,6 +1104,11 @@ void CEnvBase::ReadConfig(const std::string& strFile, std::vector<std::string>& 
             std::string strTemp = strKey;
             strTemp.append(1, '=').append(strVal);
             strLine.swap(strTemp);
+        }
+        else if (m_stError.IsCatch(ERROR_CODE_CONFIG_INVALID))
+        {
+            m_stError.SetError(ERROR_CODE_CONFIG_INVALID, strLine);
+            return;
         }
 
         cfgArgs.push_back(strLine);
