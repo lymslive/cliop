@@ -642,7 +642,7 @@ env.Catch(errors, sizeof(errors)/sizeof(errors[0]));
 ```
 
 也可用 `CatchAll()` 方法捕获所有能处理的错误，然后相应地有 `Ignore()` 方法忽略
-某些错误。例如要求捕获所有处理，但是允许未定义选项，也可忽略读配置文件：
+某些错误。例如要求捕获所有错误，但是允许未定义选项，也可忽略读配置文件：
 
 ```cpp
 env.CatchAll().Ignore(ERROR_CODE_OPTION_UNKNOWN).Ignore(ERROR_CODE_CONFIG_UNREADABLE);
@@ -653,7 +653,9 @@ env.CatchAll().Ignore(ERROR_CODE_OPTION_UNKNOWN).Ignore(ERROR_CODE_CONFIG_UNREAD
 
 #### 错误码列表
 
-本库定义的错误码在 `cli::ErrorCode` 枚举类型中。详情请参考相关注释或文档。
+本库定义的错误码在 `cli::ErrorCode` 枚举类型中。详情请参考相关注释或文档。在单
+元测试文件 [test-error.cpp](utest/test-error.cpp) 也有大量示例演示何时返回哪个
+错误码。
 
 用 `Catch()` 方法捕获这些错误码，需要在 `Feed()` 解析参数之前调用，部分规范选
 项、子命令设计的错误，还应在设置选项、子命令之前调用。
@@ -671,7 +673,7 @@ void my_error_report(int code, const std::string& text)
 }
 
 auto save_handler = cli::SetErrorHandler(my_error_report);
-// 这里触发错误将调用 my_error_report
+// 这里触发错误将调用 my_error_report()
 cli::SetErrorHandler(save_handler);
 ```
 

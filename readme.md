@@ -737,18 +737,100 @@ again via `argv[0]` or `program_invocation_short_name`. Other than that, if
 the client program has special needs, it is also possible to reconstruct
 `argv[]` as needed and pass it on to `CEnvBase::Feed()`.
 
-## Undefined Behavior
+### Error Handling
 
-The library does not use exceptions, and many methods return `*this` for the convenience of chained calls without returning an error code.
-Therefore, some cases where the usage is obviously unreasonable and the user should avoid it are not specially treated, so their behavior is not defined. Undefined means it depends on the implementation, the current implementation may be acceptable, but the logic is not guaranteed to be compatible with subsequent development.
+By default, the `CEnvBase::Feed()` method will read in and parse command-line
+arguments as much as possible, only explicit `--help` or `--version` will
+return a special error code `ERROR_CODE_HELP` in advance, otherwise it will go
+to the `Run()` method or registered handler function, and return the returned
+value of the latter. If the `Run()` method is not override and the handler
+function is not registered, the `Feed()` will generally return `0` to let the
+caller continue processing the business logic.
 
-Here is a list of some undefined behaviors (not necessarily exhaustive):
+You can explicitly require the `CEnvBase` object to catch certain errors when
+parsing command-line arguments. For example, the above-mentioned
+`SubCommandOnly()` and `SetOptionOnly()` are two common methods, that only
+allow user to enter preset subcommands or options. Setting the option to
+mandatory is also another explicit requirement.
 
-* Set the long option named empty
-* Set long option name duplicated
-* Set short option name duplicated
-* Register subcommand named empty, or duplicated
-* Get value of flag which option with no argument
+#### The General Way to Catch and Ignore Errors
+
+There are actually more general `Catch()` method to pre-declare the catch of
+some special errors, such as:
+
+```cpp
+// using namespace cli;
+env.Catch(ERROR_CODE_COMMAND_UNKNOWN).Catch(ERROR_CODE_OPTION_UNKNOWN);
+
+// or equivalently:
+int errors[] = {ERROR_CODE_COMMAND_UNKNOWN, ERROR_CODE_OPTION_UNKNOWN};
+env.Catch(errors, sizeof(errors)/sizeof(errors[0]));
+```
+
+It is also possible to catch all errors that can be handled using the
+`CatchAll()` method, and then have the `Ignore()` method correspondingly to
+ignore some errors. For example, all errors is required to be captured, but
+undefined options are allowed, and the unreadable configuration file can be
+ignored:
+
+```cpp
+env.CatchAll().Ignore(ERROR_CODE_OPTION_UNKNOWN).Ignore(ERROR_CODE_CONFIG_UNREADABLE);
+```
+
+However, if you use `Set()` method to setup an option that must be entered,
+such as `--option=?`, the error it triggers cannot be ignored, after all, the
+two requirements are contradictory.
+
+#### List of Error Eodes
+
+The error code defined in this library is in the `cli::ErrorCode` enumeration
+type. Please refer to the relevant comment or documentation for details. And
+there are many examples in [test-error.cpp](utest/test-error.cpp), showing
+when report what errors.
+
+These error codes can be captured with the `Catch()` method, which need to be
+called before the `Feed()` parses the parameters, and some errors in the
+design of canonical options and subcommands should be called before setting
+options and subcommands.
+
+#### Customize the error reporting function
+
+When an error is detected, a line of information is printed to the standard
+error `stderr` by default to prompt the user to notice the error. However, it
+also allows client programs to provide their own error reporting functions,
+such as:
+
+```cpp
+void my_error_report(int code, const std::string& text)
+{
+    // todo ...
+    fprintf(stdout, "MY-E%d: %s\n", code, text.c_str());
+}
+
+auto save_handler = cli::SetErrorHandler(my_error_report);
+// Here any error triggered will invok my_error_report()
+cli::SetErrorHandler(save_handler);
+```
+
+The error report or handler receives two arguments, an integer error code and
+a corresponding descriptive string.
+
+The free function `cli::SetErrorHandler()` is used to register the error
+handler and returns the original handler, which can be saved for later
+rollback if needed.
+
+#### Undefined behavior
+
+Other unhandled errors, or tentatively called undefined behavior. Undefined
+meaning depends on the implementation, the current implementation may be
+acceptable, but does not guarantee the compatibility in detail at the time of
+subsequent development iterations.
+
+The following is a list of undefined behaviors that are clearly unreasonable
+(not necessarily exhaustive) and should be avoided by users as much as
+possible:
+
+* Get value of flag which option with no argument.
 
 ## Code Reference
 
