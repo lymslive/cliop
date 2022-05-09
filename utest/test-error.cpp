@@ -313,6 +313,12 @@ DEF_TAST(error_bind_position, "test postion argument bind index")
     {
         cli::CEnvBase env;
         env.Catch(cli::ERROR_CODE_POSITION_BIND)
+            .Set("#3 --bind=", "description");
+        COUT(env.Feed(argc, argv), cli::ERROR_CODE_POSITION_BIND);
+    }
+    {
+        cli::CEnvBase env;
+        env.Catch(cli::ERROR_CODE_POSITION_BIND)
             .Set("#1 --input=", "description")
             .Set("#1 --output=", "description");
         COUT(env.Feed(argc, argv), cli::ERROR_CODE_POSITION_BIND);

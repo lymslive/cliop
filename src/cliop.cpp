@@ -1025,6 +1025,8 @@ void CEnvBase::MoveArgument()
         nSize = m_vecOptions.size();
     }
 
+    // collect COption* whose m_iBindIndex is set
+    int iMaxIndex = 0;
     std::vector<COption*> vecOptions(nSize, nullptr);
     for (auto it = m_vecOptions.begin(); it != m_vecOptions.end(); ++it)
     {
@@ -1041,7 +1043,12 @@ void CEnvBase::MoveArgument()
                 m_stError.SetError(ERROR_CODE_POSITION_BIND, strText);
                 return;
             }
+
             vecOptions[it->m_iBindIndex - 1] = &(*it);
+            if (iMaxIndex < it->m_iBindIndex)
+            {
+                iMaxIndex = it->m_iBindIndex;
+            }
         }
         else if(m_stError.IsCatch(ERROR_CODE_POSITION_BIND))
         {
@@ -1052,6 +1059,21 @@ void CEnvBase::MoveArgument()
         }
     }
 
+    if(m_stError.IsCatch(ERROR_CODE_POSITION_BIND))
+    {
+        for (int i = iMaxIndex - 1; i >= 0; --i)
+        {
+            if (vecOptions[i-1] == nullptr)
+            {
+                std::string strText = "no preposition bound index #";
+                strText += std::to_string(i);
+                m_stError.SetError(ERROR_CODE_POSITION_BIND, strText);
+                return;
+            }
+        }
+    }
+
+    // move from #1 #2 ... in order
     size_t nMoved = 0;
     for (auto it = vecOptions.begin(); it != vecOptions.end(); ++it)
     {
