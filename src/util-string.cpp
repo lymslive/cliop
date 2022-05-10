@@ -74,7 +74,7 @@ int Join(const std::vector<std::string>& vecSrc, std::string& strDest, char cSep
     {
         if (!strDest.empty())
         {
-            strDest.append(1, '\0');
+            strDest.append(1, cSeparator);
         }
         strDest.append(vecSrc[i]);
     }
@@ -160,6 +160,69 @@ int Trim(std::string& strSrc)
         strSrc = strSrc.substr(iBegin, iEnd - iBegin + 1);
     }
     return iSize - strSrc.size();
+}
+
+CTextAlign& CTextAlign::AddLine(std::vector<std::string>& line)
+{
+    m_vLine.push_back(std::move(line));
+    return *this;
+}
+
+std::string CTextAlign::GetText()
+{
+    int colMax = 0;
+    for (auto& item : m_vLine)
+    {
+        if (colMax < item.size())
+        {
+            colMax = item.size();
+        }
+    }
+
+    for (int col = 0; col < colMax - 1; ++col)
+    {
+        int widthMax  = 0;
+        for (auto& item : m_vLine)
+        {
+            if (col < item.size() && widthMax < item[col].size())
+            {
+                widthMax = item[col].size();
+            }
+        }
+        if (widthMax > m_iWidthMax && m_iWidthMax > 0)
+        {
+            widthMax = m_iWidthMax;
+        }
+
+        for (auto& item : m_vLine)
+        {
+            if (col >= item.size())
+            {
+                continue;
+            }
+            if (widthMax + m_iColSep > item[col].size())
+            {
+                item[col].append(widthMax + m_iColSep - item[col].size(), ' ');
+            }
+            else
+            {
+                item[col].append(1, ' ');
+            }
+        }
+    }
+
+    std::string strText;
+    for (auto& item : m_vLine)
+    {
+        std::string strLine;
+        for (size_t col = 0; col < item.size(); ++col)
+        {
+            strLine.append(item[col]);
+        }
+        strText.append(strLine).append("\n");
+    }
+
+    return strText;
 }
 
 } /* util */ 

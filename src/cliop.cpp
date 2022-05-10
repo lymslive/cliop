@@ -1200,8 +1200,6 @@ void CEnvBase::HelpVersion()
 
 void CEnvBase::Usage(std::string& outText)
 {
-    // outText.append(m_stCommand.m_strDescription) .append("\t").append(m_strVersion).append("\n");
-
     outText.append("Usage: ").append(m_stCommand.m_strName);
     if (!m_vecCommand.empty())
     {
@@ -1209,20 +1207,32 @@ void CEnvBase::Usage(std::string& outText)
     }
     outText.append(" [options] [arguments] ...\n");
 
+    if (!m_strVersion.empty())
+    {
+        outText.append("\t").append(m_strVersion);
+    }
+    if (!m_stCommand.m_strDescription.empty())
+    {
+        outText.append("\t").append(m_stCommand.m_strDescription);
+    }
+    outText.append("\n");
+
+    std::vector<std::string> line;
     if (!m_vecCommand.empty())
     {
         outText.append("Command:\n");
-        for (size_t i = 0; i < m_vecCommand.size(); ++i)
+        util::CTextAlign align;
+        for (auto it = m_vecCommand.begin(); it != m_vecCommand.end(); ++it)
         {
-            outText.append("  ")
-                .append(m_vecCommand[i].m_strName)
-                .append("\t")
-                .append(m_vecCommand[i].m_strDescription)
-                .append("\n");
+            line.push_back("  " + it->m_strName);
+            line.push_back(it->m_strDescription);
+            align.AddLine(line);
         }
+        outText.append(align.GetText());
     }
 
     outText.append("Option:\n");
+    util::CTextAlign align;
     for (auto it = m_vecOptions.begin(); it != m_vecOptions.end(); ++it)
     {
         std::string strName("  ");
@@ -1255,9 +1265,12 @@ void CEnvBase::Usage(std::string& outText)
         {
             strName.append(" [").append(it->m_strDefault).append("]");
         }
-        outText.append(strName).append("\n\t").append(it->m_strDescription);
-        outText.append(1, '\n');
+
+        line.push_back(strName);
+        line.push_back(it->m_strDescription);
+        align.AddLine(line);
     }
+    outText.append(align.GetText());
 }
 
 } /* cli */ 

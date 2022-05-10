@@ -71,6 +71,30 @@ int TrimRight(std::string& strSrc);
  * */
 int Trim(std::string& strSrc);
 
+/** Format text, align with each column width as much as possible. */
+class CTextAlign
+{
+    typedef std::vector<std::string> row_t;
+
+    std::vector<row_t> m_vLine; // table string
+    int m_iWidthMax = 36;       // max width of each column
+    int m_iColSep = 4;          // add counts of space between cloumn
+
+public:
+    CTextAlign(int widthMax = 40, int colSep = 4)
+        : m_iWidthMax(widthMax), m_iColSep(colSep) {}
+
+    /** Add a line, vector of column string of this row.
+     * @param [IN] line, will be moved into this object.
+     * */
+    CTextAlign& AddLine(std::vector<std::string>& line);
+
+    /** Get the formated text, with "\n" at end of each row. */
+    std::string GetText();
+
+private:
+};
+
 } /* util */ 
 
 #endif /* end of include guard: UTIL_STRING_H__ */

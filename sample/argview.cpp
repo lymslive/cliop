@@ -22,6 +22,7 @@ int main(int argc, const char* argv[])
     }
 
     cli::CEnvBase env;
+    env.Command("argview", "Examine what command line arguments received.");
     // set option is not neccessary, only effect parse the specified option
     set_options(env);
 
@@ -31,20 +32,20 @@ int main(int argc, const char* argv[])
         return nFeed;
     }
 
-    const std::vector<std::string>& argvLeft = env.LeftArgs();
+    const std::vector<std::string>& Argv = env.Argv();
     printf("position arguments:\n");
-    for (int i = 0; i < argvLeft.size(); ++i)
+    for (int i = 0; i < Argv.size(); ++i)
     {
         // ways to get the same argument
-        std::string arg = argvLeft[i];
+        std::string arg = Argv[i];
         std::string arg2 = env.Get(i+1);
         std::string arg3 = env[i+1];
         printf("\t%s\t%s\t%s\n", arg.c_str(), arg2.c_str(), arg3.c_str());
     }
 
-    const cli::CArgument& args = env.GetArgument();
+    const std::map<std::string, std::string>& Args = env.Args();
     printf("option arguments:\n");
-    for (auto& item : args.m_mapArgs)
+    for (auto& item : Args)
     {
         std::string key = item.first;
         std::string val = item.second;
@@ -61,6 +62,10 @@ int main(int argc, const char* argv[])
     if (!env.Has("Default"))
     {
         printf("\tDefault = %s\n", env.Get("Default").c_str());
+    }
+    if (!env.Has("user"))
+    {
+        printf("\tuser = %s\n", env.Get("user").c_str());
     }
 
     if (env.Has("expr"))
@@ -91,6 +96,8 @@ void set_options(cli::CEnvBase& env)
         .Set("--Default= [Val]", "option that has default val")
         .Set("-u $USER --user=", "user can be from environment")
         .Set("-e --expr=+", "express can be repeated provided")
+        .Set("-i #1 --input=", "input file name")
+        .Set("-o #2 --output=", "output file name")
         ;
 
     // requried option must be provided, otherwise env.Feed() return error

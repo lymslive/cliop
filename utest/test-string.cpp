@@ -126,3 +126,31 @@ DEF_TAST(string_trim, "test trim space from string")
     COUT(util::Trim(strSrc), 6);
     COUT(strSrc, "");
 }
+
+DEF_TAST(string_align1, "test align text with 2 col")
+{
+    util::CTextAlign align(8, 2);
+    std::vector<std::string> line;
+    line.push_back("aa"); line.push_back("right text");
+    align.AddLine(line);
+    COUT(line.empty(), true);
+    line.push_back("aabb"); line.push_back("right text");
+    align.AddLine(line);
+    line.push_back("aabbaa"); line.push_back("right text");
+    align.AddLine(line);
+    line.push_back("aabbaabb"); line.push_back("right text");
+    align.AddLine(line);
+    line.push_back("aabbaabbcc"); line.push_back("right text");
+    align.AddLine(line);
+    line.push_back("aabbaabb"); line.push_back("right text");
+    align.AddLine(line);
+    line.push_back("aabbaa"); line.push_back("right text");
+    align.AddLine(line);
+    line.push_back("aabb"); line.push_back("right text");
+    align.AddLine(line);
+    line.push_back("aa"); line.push_back("right text");
+    align.AddLine(line);
+
+    std::string text = align.GetText();
+    fprintf(stderr, "%s\n", text.c_str());
+}
