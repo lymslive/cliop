@@ -30,6 +30,8 @@ else
 CXXFLAGS += -O2
 endif
 
+export CXXFLAGS
+
 LDFLAGS = 
 
 INCLUDE =

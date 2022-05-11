@@ -9,4 +9,4 @@ LIB = -L ../lib -lcliop
 all : $(EXE)
 
 $(EXE) : $(EXE_DIR)/% : %.cpp ../lib/libcliop.a
-	g++ -o $@ $^ $(INC) $(LIB)
+	g++ -o $@ $^ $(CXXFLAGS) $(INC) $(LIB)

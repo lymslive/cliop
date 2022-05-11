@@ -2,7 +2,7 @@
  * @file argview.cpp
  * @author lymslive
  * @date 2022-04-30
- * @brief Expample the default behavior to parse commnad line argument and how
+ * @brief Expample for the default behavior to parse commnad line argument and how
  * to retrieve them.
  * */
 #include "cliop.h"
