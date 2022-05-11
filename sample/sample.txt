@@ -1,0 +1,2 @@
+int i = 3; // comment
+double xx = 3.14; // comment
