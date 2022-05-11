@@ -510,13 +510,16 @@ private:
     /** reserved option: --help --config --version. */
     void ReservedOption();
 
-    /** Print usage or help text. */
-    void Help();
-    void HelpVersion();
-
 public:
     /** Generate usage help text. */
     virtual void Usage(std::string& outText);
+
+    /** Print usage or help text. */
+    void Help();
+
+    /** Print version string. */
+    void HelpVersion();
+
 };
 
 } /* cli */ 
