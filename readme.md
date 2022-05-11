@@ -79,7 +79,8 @@ programs, this library distills the following default rules:
   with a space-delimited argument written in the next argument or with `=`
   glued to the same argument.
 * If the option and it argument are glued with `=`, the leading `--` can also
-  be omitted.
+  be omitted. However, the argument begin with `=` is not option, which can be
+  used as normal argument.
 * A special argument with only two dashed `--` is itself ignored, representing
   only the end of the option, and all subsequent arguments are normal arguments,
   even if it contains the `-` prefix or the `=` midfix.

@@ -279,6 +279,12 @@ int CEnvBase::ParseCmdline(const std::vector<std::string>& vecArgs, size_t pos)
         std::string strArgTemp = vecArgs[i];
         size_t iDash= util::TrimLeft(strArgTemp, '-');
         size_t iEqual = strArgTemp.find('=');
+        if (iEqual == 0)
+        {
+            SaveArgument(vecArgs[i]);
+            continue;
+        }
+
         if (iEqual != std::string::npos)
         {
             // --LongName=argument; even no leading - or empty after =
