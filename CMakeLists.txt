@@ -4,6 +4,8 @@ project(cliop CXX)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 add_library(cliop 
     src/cliop.cpp
     src/util-string.cpp
@@ -21,8 +23,15 @@ add_executable(utest-cliop
     utest/test-subcmd.cpp
 )
 target_link_libraries(utest-cliop
-    PRIVATE couttast
+    PRIVATE cliop
+#    PRIVATE couttast
 )
+target_include_directories(utest-cliop
+    PRIVATE ${PROJECT_SOURCE_DIR}/src
+    PRIVATE ${COUTTAST_INCLUDE_DIRS}/couttast
+)
+
+enable_testing()
 add_test(NAME utest-clop COMMAND utest-cliop
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/utest
 )
