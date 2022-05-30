@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.1 FATAL_ERROR)
 project(cliop CXX)
+set(cliop_VERSION_MAJOR "0")
+set(cliop_VERSION_MINOR "2")
 
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
@@ -33,9 +35,24 @@ target_include_directories(utest-cliop
 
 enable_testing()
 add_test(NAME utest-clop COMMAND utest-cliop
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/utest
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 endif()
+
+# package config
+include(CMakePackageConfigHelpers)
+configure_package_config_file(${CMAKE_CURRENT_SOURCE_DIR}/Config.cmake.in
+    "${CMAKE_CURRENT_BINARY_DIR}/cliopConfig.cmake"
+    INSTALL_DESTINATION "lib/cmake/cliop"
+    NO_SET_AND_CHECK_MACRO
+    NO_CHECK_REQUIRED_COMPONENTS_MACRO
+)
+
+write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/cliopConfigVersion.cmake"
+    VERSION "${cliop_VERSION_MAJOR}.${cliop_VERSION_MINOR}"
+    COMPATIBILITY AnyNewerVersion
+)
 
 set(CMAKE_INSTALL_PREFIX ${HOME})
 install(FILES src/cliop.h
@@ -44,4 +61,10 @@ install(FILES src/cliop.h
 
 install(TARGETS cliop
     DESTINATION "lib"
+)
+
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/cliopConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/cliopConfigVersion.cmake
+    DESTINATION lib/cmake/cliop
 )

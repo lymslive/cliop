@@ -36,10 +36,10 @@ LDFLAGS =
 
 INCLUDE =
 ifeq ($(MAKECMDGOALS),test)
-INCLUDE += -I src/
+INCLUDE += -I src/ -I $(HOME)/include/couttast
 endif
 ifeq ($(MAKECMDGOALS),utest)
-INCLUDE += -I src/
+INCLUDE += -I src/ -I $(HOME)/include/couttast
 endif
 
 TARGET=$(LIB_DIR)/libcliop.a
@@ -68,10 +68,13 @@ $(TEST_TARGET):$(TEST_OBJS)
 	$(CXX) $(LDFLAGS) -o $@ $^
 
 TINYTAST = utest/tinytast.hpp
-utest : $(TINYTAST) dir $(TEST_TARGET)
+#utest : $(TINYTAST) dir $(TEST_TARGET)
+utest : dir $(TEST_TARGET)
 test : utest
 	$(TEST_TARGET) --cout=silent
 
+# better to install couttast in system location(/usr/local/include) or $HOME/include
+# depressed download into utest/ dirctory
 TINYTAST_REMOTE = https://raw.githubusercontent.com/lymslive/couttast/main/include/tinytast.hpp
 $(TINYTAST) :
 	@wget $(TINYTAST_REMOTE) -O $@
@@ -85,7 +88,7 @@ docs :
 rebuild: clean all
 
 clean:
-	rm -rf $(OBJ_DIR)/*.o $(TARGET)
+	rm -rf $(OBJ_DIR)/*.o $(OBJ_DIR)/*.d $(TARGET)
 
 echo:
 	@echo TARGET = $(TARGET)

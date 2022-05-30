@@ -1,0 +1,4 @@
+@PACKAGE_INIT@
+
+set(CLIOP_INCLUDE_DIRS "${PACKAGE_PREFIX_DIR}/include")
+message(STATUS "cliop found. Headers: ${CLIOP_INCLUDE_DIRS}")
