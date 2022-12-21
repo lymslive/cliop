@@ -1176,12 +1176,18 @@ void CEnvBase::ReadConfig(const std::string& strFile, std::vector<std::string>& 
 
 void CEnvBase::ReservedOption()
 {
-    if (nullptr == FindOption(OPTION_NAME_CONFIG))
+    COption* pConfig = FindOption(OPTION_NAME_CONFIG);
+    if (nullptr == pConfig)
     {
         std::string strConfig = program_invocation_short_name;
         strConfig += ".ini";
         Option('\0', OPTION_NAME_CONFIG, "read arguments from config file", strConfig);
     }
+    else if (pConfig->m_strDefault.empty())
+    {
+        pConfig->m_strDefault = std::string(program_invocation_short_name) + ".ini";
+    }
+
     if (nullptr == FindOption(OPTION_NAME_VERSION))
     {
         Flag('\0', OPTION_NAME_VERSION, "print version");
