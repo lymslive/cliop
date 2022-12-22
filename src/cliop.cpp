@@ -433,7 +433,11 @@ std::string CEnvBase::GetDefault(const std::string& strOptionName)
         {
             if (!it->m_strEnvName.empty())
             {
-                strArg = getenv(it->m_strEnvName.c_str());
+                const char* pszEnv = getenv(it->m_strEnvName.c_str());
+                if (pszEnv != nullptr)
+                {
+                    strArg = pszEnv;
+                }
             }
             if (strArg.empty())
             {
