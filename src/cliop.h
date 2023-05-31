@@ -144,6 +144,7 @@ enum EOptionType
 };
 
 /** Convert string to other type value. */
+void ConvertValue(const std::string& src, std::string &dest);
 void ConvertValue(const std::string& src, int &dest);
 void ConvertValue(const std::string& src, double &dest);
 void ConvertValue(const std::string& src, std::vector<std::string> &dest);

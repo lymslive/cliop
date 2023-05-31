@@ -93,6 +93,11 @@ void CErrorRun::SetError(int code, const std::string& context)
     }
 }
 
+void ConvertValue(const std::string& src, std::string &dest)
+{
+    dest = src;
+}
+
 void ConvertValue(const std::string& src, int &dest)
 {
     dest = atoi(src.c_str());
